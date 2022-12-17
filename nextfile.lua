@@ -13,11 +13,26 @@ local settings = {
 
   --at end of directory jump to start and vice versa
   allow_looping = true,
-  
+
   --order by natural (version) numbers, thus behaving case-insensitively and treating multi-digit numbers atomically
   --e.x.: true will result in the following order:   09A 9A  09a 9a  10A 10a
   --      while false will result in:                09a 09A 10a 10A 9a  9A
   version_flag = true,
+
+  --load next file automatically default value
+  --recommended to keep as false and cycle with toggle or set with a script message
+  --KEY script-message loadnextautomatically [true|false]
+  --KEY script-binding toggleauto
+  load_next_automatically = true,
+
+  accepted_eof_reasons = {
+    ['eof']=true,     --The file has ended. This can (but doesn't have to) include incomplete files or broken network connections under circumstances.
+    ['stop']=true,    --Playback was ended by a command.
+    ['quit']=false,    --Playback was ended by sending the quit command.
+    ['error']=true,   --An error happened. In this case, an error field is present with the error string.
+    ['redirect']=true,--Happens with playlists and similar. Details see MPV_END_FILE_REASON_REDIRECT in the C API.
+    ['unknown']=true, --Unknown. Normally doesn't happen, unless the Lua API is out of sync with the C API.
+  }
 }
 
 local filetype_lookup = {}
@@ -32,6 +47,44 @@ if settings.linux_over_windows==nil then
     settings.linux_over_windows = false
   else
     settings.linux_over_windows = true
+  end
+end
+
+local lock = true --to avoid infinite loops
+function on_loaded()
+  if mp.get_property('filename'):match("^%a%a+:%/%/") then return end
+  pwd = mp.get_property('working-directory')
+  relpath = mp.get_property('path')
+  path = utils.join_path(pwd, relpath)
+  filename = mp.get_property('filename')
+  dir = utils.split_path(path)
+  lock = true
+  mp.set_property_native('pause', false)
+end
+
+function on_close(reason)
+  local pl_count = mp.get_property_number('playlist-count', 1)
+  local pl_pos = mp.get_property_number('playlist-current-pos', 1)
+  if pl_count > pl_pos and pl_pos ~= -1 then
+    return
+  elseif settings.accepted_eof_reasons[reason.reason] and settings.load_next_automatically and lock then
+    msg.info('Loading next file in directory')
+    mp.command('playlist-clear')
+    nexthandler()
+  end
+end
+
+function toggleauto()
+  if not settings.load_next_automatically then
+    settings.load_next_automatically = true
+    if mp.get_property_number('playlist-count', 0) > 1 then
+      mp.osd_message('Playlist will be purged when loading new file')
+    else
+      mp.osd_message('Loading next when file ends')
+    end
+  else
+    settings.load_next_automatically = false
+    mp.osd_message('Not loading next when file ends')
   end
 end
 
@@ -87,14 +140,8 @@ function parse_files(res, delimiter)
 end
 
 function movetofile(forward)
-  if mp.get_property('filename'):match("^%a%a+:%/%/") then return end
-  local pwd = mp.get_property('working-directory')
-  local relpath = mp.get_property('path')
+  lock = false
   if not pwd or not relpath then return end
-
-  local path = utils.join_path(pwd, relpath)
-  local filename = mp.get_property("filename")
-  local dir = utils.split_path(path)
 
   local files, error
   if settings.linux_over_windows then
@@ -142,5 +189,19 @@ function movetofile(forward)
   end
 end
 
-mp.add_key_binding('Shift+RIGHT', 'nextfile', nexthandler)
-mp.add_key_binding('Shift+LEFT', 'previousfile', prevhandler)
+--read settings from a script message
+function loadnext(msg, value)
+  if msg == 'next' then nexthandler() ; return end
+  if msg == 'previous' then prevhandler() ; return end
+  if msg == 'auto' then
+    if value == 'toggle' then toggleauto() ; return end
+    toggleauto(value:lower() == 'true' )
+  end
+end
+
+mp.register_script_message('nextfile', loadnext)
+mp.add_key_binding('SHIFT+PGDWN', 'nextfile', nexthandler)
+mp.add_key_binding('SHIFT+PGUP', 'previousfile', prevhandler)
+mp.add_key_binding('CTRL+N', 'autonextfiletoggle', toggleauto)
+mp.register_event('file-loaded', on_loaded)
+mp.register_event('end-file', on_close)
