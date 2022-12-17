@@ -151,7 +151,7 @@ function movetofile(forward)
   end
 
   if not files then
-    msg.error("Subprocess failed: "..(error or ''))
+    msg.error('Subprocess failed: '..(error or ''))
     return
   end
 
@@ -161,7 +161,7 @@ function movetofile(forward)
   local firstfile = nil
   for _, file in ipairs(files) do
     if found == true then
-      mp.commandv("loadfile", utils.join_path(dir, file), "replace")
+      mp.commandv('loadfile', utils.join_path(dir, file), 'replace')
       lastfile = false
       break
     end
@@ -173,7 +173,7 @@ function movetofile(forward)
           found = false
         else
           if firstfile == nil then break end
-          mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+          mp.commandv('loadfile', utils.join_path(dir, memory), 'replace')
           break
         end
       end
@@ -182,10 +182,10 @@ function movetofile(forward)
     if firstfile == nil then firstfile = file end
   end
   if lastfile and firstfile and settings.allow_looping then
-    mp.commandv("loadfile", utils.join_path(dir, firstfile), "replace")
+    mp.commandv('loadfile', utils.join_path(dir, firstfile), 'replace')
   end
   if not found and memory then
-    mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+    mp.commandv('loadfile', utils.join_path(dir, memory), 'replace')
   end
 end
 
