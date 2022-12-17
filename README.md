@@ -15,3 +15,15 @@ You can copy paste below into your input.conf if you want to change the keybindi
   
 #### My other mpv scripts
 - [collection of scripts](https://github.com/jonniek/mpv-scripts)
+
+---
+
+## Fork info
+
+Original author: [jonniek](https://github.com/jonniek)  
+Forked from https://github.com/jonniek/mpv-nextfile  
+
+#### Changes
+- Added back load next file automatically feature;
+- Disable autoload when the played file is in a playlist and not the last one;
+- Restore old keybindings: use `PgUp` and `PgDn` instead of arrows;  
