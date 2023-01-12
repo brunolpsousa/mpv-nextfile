@@ -8,16 +8,8 @@ local settings = {
 		"mkv", "avi", "mp4", "ogv", "webm", "rmvb", "flv", "wmv", "mpeg", "mpg", "m4v", "3gp",
 	},
 
-	--linux(true)/windows(false)/auto(nil)
-	linux_over_windows = nil,
-
 	--at end of directory jump to start and vice versa
 	allow_looping = true,
-
-	--order by natural (version) numbers, thus behaving case-insensitively and treating multi-digit numbers atomically
-	--e.x.: true will result in the following order:   09A 9A  09a 9a  10A 10a
-	--      while false will result in:                09a 09A 10a 10A 9a  9A
-	version_flag = true,
 
 	--load next file automatically default value
 	--recommended to keep as false and cycle with toggle or set with a script message
@@ -38,16 +30,6 @@ local settings = {
 local filetype_lookup = {}
 for _, ext in ipairs(settings.filetypes) do
 	filetype_lookup[ext] = true
-end
-
---check os
-if settings.linux_over_windows == nil then
-	local o = {}
-	if mp.get_property_native("options/vo-mmcss-profile", o) ~= o then
-		settings.linux_over_windows = false
-	else
-		settings.linux_over_windows = true
-	end
 end
 
 local lock = true --to avoid infinite loops
@@ -98,52 +80,25 @@ function prevhandler()
 	movetofile(false)
 end
 
-function get_files_windows(dir)
-	local args = {
-		"powershell",
-		"-NoProfile",
-		"-Command",
-		[[& {
-          Trap {
-              Write-Error -ErrorRecord $_
-              Exit 1
-          }
-          $path = "]]
-			.. dir
-			.. [["
-          $escapedPath = [WildcardPattern]::Escape($path)
-          cd $escapedPath
-    
-          $list = (Get-ChildItem -File | Sort-Object { [regex]::Replace($_.Name, '\d+', { $args[0].Value.PadLeft(20) }) }).Name
-          $string = ($list -join "/")
-          $u8list = [System.Text.Encoding]::UTF8.GetBytes($string)
-          [Console]::OpenStandardOutput().Write($u8list, 0, $u8list.Length)
-      }]],
-	}
-	local process = utils.subprocess({ args = args, cancellable = false })
-	return parse_files(process, "%/")
-end
-
-function get_files_linux(dir)
-	local flags = ("-1p" .. (settings.version_flag and "v" or ""))
-	local args = { "ls", flags, dir }
-	local process = utils.subprocess({ args = args, cancellable = false })
-	return parse_files(process, "\n")
-end
-
-function parse_files(res, delimiter)
-	if not res.error and res.status == 0 then
-		local valid_files = {}
-		for line in res.stdout:gmatch("[^" .. delimiter .. "]+") do
-			local ext = line:match("^.+%.(.+)$")
-			if ext and filetype_lookup[ext:lower()] then
-				table.insert(valid_files, line)
-			end
+function file_filter(filenames)
+	local files = {}
+	for i = 1, #filenames do
+		local file = filenames[i]
+		local ext = file:match("%.([^%.]+)$")
+		if ext and filetype_lookup[ext:lower()] then
+			table.insert(files, file)
 		end
-		return valid_files, nil
-	else
-		return nil, res.error
 	end
+	return files
+end
+
+function alphanumsort(a, b)
+	local function padnum(d)
+		local dec, n = string.match(d, "(%.?)0*(.+)")
+		return #dec > 0 and ("%.12f"):format(d) or ("%s%03d%s"):format(dec, #n, n)
+	end
+	return tostring(a):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#b)
+		< tostring(b):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#a)
 end
 
 function movetofile(forward)
@@ -152,17 +107,8 @@ function movetofile(forward)
 		return
 	end
 
-	local files, error
-	if settings.linux_over_windows then
-		files, error = get_files_linux(dir)
-	else
-		files, error = get_files_windows(dir)
-	end
-
-	if not files then
-		msg.error("Subprocess failed: " .. (error or ""))
-		return
-	end
+	local files = file_filter(utils.readdir(dir, "files"))
+	table.sort(files, alphanumsort)
 
 	local found = false
 	local memory = nil
