@@ -202,6 +202,6 @@ end
 mp.register_script_message('nextfile', loadnext)
 mp.add_key_binding('SHIFT+PGDWN', 'nextfile', nexthandler)
 mp.add_key_binding('SHIFT+PGUP', 'previousfile', prevhandler)
-mp.add_key_binding('CTRL+N', 'autonextfiletoggle', toggleauto)
+mp.add_key_binding('CTRL+n', 'autonextfiletoggle', toggleauto)
 mp.register_event('file-loaded', on_loaded)
 mp.register_event('end-file', on_close)
