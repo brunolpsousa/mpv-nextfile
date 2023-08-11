@@ -72,6 +72,10 @@ function toggleauto()
 	end
 end
 
+function show_osd_message(file)
+	mp.osd_message("Now playing: " .. file, 3) -- Adjust OSD display time as needed
+end
+
 function nexthandler()
 	movetofile(true)
 end
@@ -118,6 +122,7 @@ function movetofile(forward)
 		if found == true then
 			mp.commandv("loadfile", utils.join_path(dir, file), "replace")
 			lastfile = false
+			show_osd_message(file)
 			break
 		end
 		if file == filename then
@@ -131,6 +136,7 @@ function movetofile(forward)
 						break
 					end
 					mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+					show_osd_message(memory)
 					break
 				end
 			end
@@ -142,9 +148,11 @@ function movetofile(forward)
 	end
 	if lastfile and firstfile and settings.allow_looping then
 		mp.commandv("loadfile", utils.join_path(dir, firstfile), "replace")
+		show_osd_message(firstfile)
 	end
 	if not found and memory then
 		mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+		show_osd_message(memory)
 	end
 end
 
