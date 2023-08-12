@@ -2,6 +2,7 @@ local utils = require("mp.utils")
 local msg = require("mp.msg")
 local settings = {
 
+-- stylua: ignore
 	filetypes = {
 		"jpg", "jpeg", "png", "tif", "tiff", "gif", "webp", "svg", "bmp",
 		"mp3", "wav", "ogm", "flac", "m4a", "wma", "ogg", "opus",
