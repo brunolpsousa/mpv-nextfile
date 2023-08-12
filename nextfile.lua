@@ -33,33 +33,40 @@ for _, ext in ipairs(settings.filetypes) do
 	filetype_lookup[ext] = true
 end
 
-local lock = true --to avoid infinite loops
-function on_loaded()
-	if mp.get_property("filename"):match("^%a%a+:%/%/") then
-		return
-	end
-	pwd = mp.get_property("working-directory")
-	relpath = mp.get_property("path")
-	path = utils.join_path(pwd, relpath)
-	filename = mp.get_property("filename")
-	dir = utils.split_path(path)
-	lock = true
-	mp.set_property_native("pause", false)
+local function show_osd_message(file)
+	mp.osd_message("Now playing: " .. file, 3) -- Adjust OSD display time as needed
 end
 
-function on_close(reason)
-	local pl_count = mp.get_property_number("playlist-count", 1)
-	local pl_pos = mp.get_property_number("playlist-current-pos", 1)
-	if pl_count > pl_pos and pl_pos ~= -1 then
-		return
-	elseif settings.accepted_eof_reasons[reason.reason] and settings.load_next_automatically and lock then
-		msg.info("Loading next file in directory")
-		mp.command("playlist-clear")
-		nexthandler()
-	end
+local function nexthandler()
+	Movetofile(true)
 end
 
-function toggleauto()
+local function prevhandler()
+	Movetofile(false)
+end
+
+local function alphanumsort(a, b)
+	local function padnum(d)
+		local dec, n = string.match(d, "(%.?)0*(.+)")
+		return #dec > 0 and ("%.12f"):format(d) or ("%s%03d%s"):format(dec, #n, n)
+	end
+	return tostring(a):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#b)
+		< tostring(b):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#a)
+end
+
+local function file_filter(filenames)
+	local files = {}
+	for i = 1, #filenames do
+		local file = filenames[i]
+		local ext = file:match("%.([^%.]+)$")
+		if ext and filetype_lookup[ext:lower()] then
+			table.insert(files, file)
+		end
+	end
+	return files
+end
+
+local function toggleauto()
 	if not settings.load_next_automatically then
 		settings.load_next_automatically = true
 		if mp.get_property_number("playlist-count", 0) > 1 then
@@ -73,46 +80,50 @@ function toggleauto()
 	end
 end
 
-function show_osd_message(file)
-	mp.osd_message("Now playing: " .. file, 3) -- Adjust OSD display time as needed
-end
-
-function nexthandler()
-	movetofile(true)
-end
-
-function prevhandler()
-	movetofile(false)
-end
-
-function file_filter(filenames)
-	local files = {}
-	for i = 1, #filenames do
-		local file = filenames[i]
-		local ext = file:match("%.([^%.]+)$")
-		if ext and filetype_lookup[ext:lower()] then
-			table.insert(files, file)
-		end
+--read settings from a script message
+local function loadnext(message, value)
+	if message == "next" then
+		nexthandler()
+	elseif message == "previous" then
+		prevhandler()
+	elseif message == "auto" and value == "toggle" then
+		toggleauto()
 	end
-	return files
 end
 
-function alphanumsort(a, b)
-	local function padnum(d)
-		local dec, n = string.match(d, "(%.?)0*(.+)")
-		return #dec > 0 and ("%.12f"):format(d) or ("%s%03d%s"):format(dec, #n, n)
+local lock = true --to avoid infinite loops
+local function on_loaded()
+	if mp.get_property("filename"):match("^%a%a+:%/%/") then
+		return
 	end
-	return tostring(a):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#b)
-		< tostring(b):lower():gsub("%.?%d+", padnum) .. ("%3d"):format(#a)
+	Pwd = mp.get_property("working-directory")
+	Relpath = mp.get_property("path")
+	Path = utils.join_path(Pwd, Relpath)
+	Filename = mp.get_property("filename")
+	Dir = utils.split_path(Path)
+	mp.set_property_native("pause", false)
+	lock = true
 end
 
-function movetofile(forward)
+local function on_close(reason)
+	local pl_count = mp.get_property_number("playlist-count", 1)
+	local pl_pos = mp.get_property_number("playlist-current-pos", 1)
+	if pl_count > pl_pos and pl_pos ~= -1 then
+		return
+	elseif settings.accepted_eof_reasons[reason.reason] and settings.load_next_automatically and lock then
+		msg.info("Loading next file in directory")
+		mp.command("playlist-clear")
+		nexthandler()
+	end
+end
+
+function Movetofile(forward)
 	lock = false
-	if not pwd or not relpath then
+	if not Pwd or not Relpath then
 		return
 	end
 
-	local files = file_filter(utils.readdir(dir, "files"))
+	local files = file_filter(utils.readdir(Dir, "files"))
 	table.sort(files, alphanumsort)
 
 	local found = false
@@ -121,12 +132,12 @@ function movetofile(forward)
 	local firstfile = nil
 	for _, file in ipairs(files) do
 		if found == true then
-			mp.commandv("loadfile", utils.join_path(dir, file), "replace")
+			mp.commandv("loadfile", utils.join_path(Dir, file), "replace")
 			lastfile = false
 			show_osd_message(file)
 			break
 		end
-		if file == filename then
+		if file == Filename then
 			found = true
 			if not forward then
 				lastfile = false
@@ -136,7 +147,7 @@ function movetofile(forward)
 					if firstfile == nil then
 						break
 					end
-					mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+					mp.commandv("loadfile", utils.join_path(Dir, memory), "replace")
 					show_osd_message(memory)
 					break
 				end
@@ -148,31 +159,12 @@ function movetofile(forward)
 		end
 	end
 	if lastfile and firstfile and settings.allow_looping then
-		mp.commandv("loadfile", utils.join_path(dir, firstfile), "replace")
+		mp.commandv("loadfile", utils.join_path(Dir, firstfile), "replace")
 		show_osd_message(firstfile)
 	end
 	if not found and memory then
-		mp.commandv("loadfile", utils.join_path(dir, memory), "replace")
+		mp.commandv("loadfile", utils.join_path(Dir, memory), "replace")
 		show_osd_message(memory)
-	end
-end
-
---read settings from a script message
-function loadnext(msg, value)
-	if msg == "next" then
-		nexthandler()
-		return
-	end
-	if msg == "previous" then
-		prevhandler()
-		return
-	end
-	if msg == "auto" then
-		if value == "toggle" then
-			toggleauto()
-			return
-		end
-		toggleauto(value:lower() == "true")
 	end
 end
 
