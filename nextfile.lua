@@ -108,9 +108,12 @@ end
 local function on_close(reason)
 	local pl_count = mp.get_property_number("playlist-count", 1)
 	local pl_pos = mp.get_property_number("playlist-current-pos", 1)
-	if pl_count > pl_pos and pl_pos ~= -1 then
+
+	if pl_count > pl_pos + 1 and pl_pos ~= -1 then
 		return
-	elseif settings.accepted_eof_reasons[reason.reason] and settings.load_next_automatically and lock then
+	end
+
+	if settings.accepted_eof_reasons[reason.reason] and settings.load_next_automatically and lock then
 		msg.info("Loading next file in directory")
 		mp.command("playlist-clear")
 		nexthandler()
